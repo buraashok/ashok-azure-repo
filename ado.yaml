@@ -1,1 +1,46 @@
-azure
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureServiceConnection: '<your-service-connection-name>'
+  resourceGroupName: 'myResourceGroup'
+  location: 'eastus'
+
+steps:
+- task: AzureCLI@2
+  displayName: 'Deploy Bicep file'
+  inputs:
+    azureSubscription: $(azureServiceConnection)
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      # Login to Azure
+      az login --service-principal -u $(SP_ID) -p $(SP_PASSWORD) --tenant $(TENANT_ID)
+
+      # Deploy Bicep template
+      az deployment group create \
+        --name $(Build.BuildId) \
+        --resource-group $(resourceGroupName) \
+        --template-file ./main.bicep \
+        --parameters adminUsername='yourAdminUsername' adminPassword='yourAdminPassword' \
+        --location $(location)
+
+- task: AzurePowerShell@5
+  displayName: 'Verify VM Deployment'
+  inputs:
+    azureSubscription: $(azureServiceConnection)
+    ScriptPath: './verify-deployment.ps1'
+    ScriptArguments: '-ResourceGroupName $(resourceGroupName)'
+
+- task: AzureCLI@2
+  displayName: 'Tag Deployed Resources'
+  inputs:
+    azureSubscription: $(azureServiceConnection)
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az tag create --name Environment --value Production
+      az tag assignment create --resource-id /subscriptions/$(subscriptionId)/resourceGroups/$(resourceGroupName) --tag Environment=Production
